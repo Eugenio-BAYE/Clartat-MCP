@@ -1,294 +1,216 @@
 # Clartat MCP Server
 
-A clean, extensible Model Context Protocol (MCP) server implementation in Scala 3.
+🔍 **Analyze GitHub Projects v2 directly in VS Code with GitHub Copilot**
 
-## Project Structure
- 
-```
-src/main/scala/com/clartat/mcp/
-├── McpServerApp.scala              # Main application entry point
-├── cli/
-│   └── CliHandler.scala           # Command-line interface handler
-├── domain/
-│   ├── JsonRpc.scala              # JSON-RPC 2.0 domain models
-│   ├── McpProtocol.scala          # MCP protocol models
-│   └── Tool.scala                 # Tool domain models
-├── protocol/
-│   ├── JsonRpcProtocol.scala      # JSON-RPC utilities
-│   └── McpProtocol.scala          # MCP protocol utilities
-├── service/
-│   ├── McpRequestHandler.scala    # Request handling logic
-│   └── McpServerIO.scala          # I/O handling (stdin/stdout)
-└── tools/
-    ├── Tool.scala                 # Base Tool trait
-    ├── ToolRegistry.scala         # Tool registry and management
-    ├── DefaultTools.scala         # Default tool configuration
-    └── impl/
-        └── AddTool.scala          # Example tool implementation
-```
+A Model Context Protocol (MCP) server that brings your GitHub Projects data into GitHub Copilot Chat.
 
-## Architecture
+---
 
-This project follows clean architecture principles with clear separation of concerns:
+## 🚀 Quick Start
 
-### Domain Layer (`domain/`)
-- **Pure domain models** with no external dependencies
-- `JsonRpc.scala`: JSON-RPC 2.0 request/response models
-- `McpProtocol.scala`: MCP-specific protocol models
-- `Tool.scala`: Tool execution results and parameters
-
-### Protocol Layer (`protocol/`)
-- **Protocol handling utilities** for creating responses
-- `JsonRpcProtocol.scala`: JSON-RPC response builders, error codes
-- `McpProtocol.scala`: MCP format builders (tool schemas, results)
-
-### Tools Layer (`tools/`)
-- **Extensible tool system** with registry pattern
-- `Tool.scala`: Base trait for all tools
-- `ToolRegistry.scala`: Central registry for tool management
-- `DefaultTools.scala`: Default tool configuration
-- `impl/`: Tool implementations
-
-### Service Layer (`service/`)
-- **Business logic and orchestration**
-- `McpRequestHandler.scala`: Routes requests to appropriate handlers
-- `McpServerIO.scala`: Manages stdin/stdout communication
-
-### CLI Layer (`cli/`)
-- **Command-line interface** for direct tool invocation
-- `CliHandler.scala`: Handles CLI arguments and execution
-
-### Application Layer
-- `McpServerApp.scala`: Main entry point, wires everything together
-
-## Building
+### Step 1: Build the Server
 
 ```bash
-# Compile
-sbt compile
-
-# Create fat JAR
 sbt assembly
 ```
 
-The JAR will be created at `target/scala-3.7.3/clartat-mcp.jar`
+This creates `target/scala-3.7.3/clartat-mcp.jar`
 
-## Usage
+### Step 2: Get a GitHub Token
 
-### Server Mode (MCP Protocol)
+1. Go to https://github.com/settings/tokens
+2. Click **"Generate new token (classic)"**
+3. Name it (e.g., "Clartat MCP")
+4. Select these scopes:
+   - ✅ `repo`
+   - ✅ `read:org`
+   - ✅ `read:project`
+5. Click **"Generate token"** and **copy it immediately** (you won't see it again!)
 
-```json
-{
-	"servers": {
-        "clartat-mcp": {
-        "command": "java",
-        "args": [
-            "-jar",
-            "{PathToYouJar}/clartat-mcp.jar"
-        ],
-        "env": {}
-        }
-    }
-}
+### Step 3: Find Your Project Number
+
+Your GitHub Project URL looks like this:
+```
+https://github.com/orgs/YOUR_ORG/projects/1
+                             ^^^^^^^^         ^
+                             your org         project number
 ```
 
-The server communicates via stdin/stdout using the JSON-RPC 2.0 protocol.
+### Step 4: Configure VS Code
 
-### CLI Mode (Direct Tool Invocation)
+Create `.vscode/mcp.json` in your workspace:
 
-```bash
-# Named form
-java -jar target/scala-3.7.3/clartat-mcp.jar --add 9 8
-
-# Positional form (assumes "add" tool)
-java -jar target/scala-3.7.3/clartat-mcp.jar 9 8
-```
-
-## Adding a New Tool
-
-Adding a new tool is simple and requires only 3 steps:
-
-### Step 1: Create the Tool Class
-
-Create a new file in `src/main/scala/com/clartat/mcp/tools/impl/`:
-
-```scala
-package com.clartat.mcp.tools.impl
-
-import com.clartat.mcp.domain._
-import com.clartat.mcp.tools.Tool
-import io.circe.Json
-
-/**
- * Multiply tool - Multiplies two integers
- */
-class MultiplyTool extends Tool {
-  
-  override val name: String = "multiply"
-  
-  override val description: String = "Multiplies two integers and returns their product"
-  
-  override val parameters: List[ToolParameter] = List(
-    ToolParameter(
-      name = "a",
-      description = "First number",
-      paramType = "number",
-      required = true
-    ),
-    ToolParameter(
-      name = "b",
-      description = "Second number",
-      paramType = "number",
-      required = true
-    )
-  )
-  
-  override def execute(arguments: Json): ToolResult = {
-    val cursor = arguments.hcursor
-    
-    val result = for {
-      a <- cursor.get[Int]("a").toOption
-      b <- cursor.get[Int]("b").toOption
-    } yield {
-      val product = a * b
-      Tool.textSuccess(product.toString)
-    }
-    
-    result.getOrElse {
-      Tool.failure("Expected integer arguments 'a' and 'b'")
-    }
-  }
-}
-
-object MultiplyTool {
-  def apply(): MultiplyTool = new MultiplyTool()
-}
-```
-
-### Step 2: Register the Tool
-
-Add your tool to `src/main/scala/com/clartat/mcp/tools/DefaultTools.scala`:
-
-```scala
-val defaultTools: List[Tool] = List(
-  AddTool(),
-  MultiplyTool()  // Add your new tool here!
-)
-```
-
-### Step 3: Done!
-
-
-## Tool Implementation Guide
-
-### Tool Trait Methods
-
-```scala
-trait Tool {
-  def name: String                        // Unique tool identifier
-  def description: String                 // Human-readable description
-  def parameters: List[ToolParameter]     // Parameter definitions
-  def execute(arguments: Json): ToolResult // Execution logic
-}
-```
-
-### Parameter Types
-
-```scala
-ToolParameter(
-  name = "param_name",
-  description = "What this parameter does",
-  paramType = "number" | "string" | "boolean" | "object" | "array",
-  required = true | false
-)
-```
-
-### Return Results
-
-```scala
-// Success with text
-Tool.textSuccess("Result text")
-
-// Success with JSON
-Tool.jsonSuccess(Json.obj("key" -> Json.fromString("value")))
-
-// Failure
-Tool.failure("Error message")
-```
-
-## MCP Protocol Methods
-
-The server implements the following MCP methods:
-
-- `initialize`: Returns server capabilities and version
-- `tools/list`: Lists all available tools
-- `tools/call`: Executes a tool with arguments
-- `notifications/initialized`: Handles initialization notification
-
-## Available Tools
-
-### 1. add
-Adds two integers and returns their sum.
-
-**Parameters:**
-- `a` (number, required): First number to add
-- `b` (number, required): Second number to add
-
-**Example:**
-```json
-{
-  "name": "add",
-  "arguments": {
-    "a": 9,
-    "b": 7
-  }
-}
-```
-
-### 2. github-project
-Fetches issues from a configured GitHub repository for analysis.
-
-**Configuration (Environment Variables):**
-- `GITHUB_TOKEN` (required): GitHub Personal Access Token with repo access
-- `GITHUB_OWNER` (required): Repository owner (e.g., "octocat")
-- `GITHUB_REPO` (required): Repository name (e.g., "hello-world")
-
-**Parameters:**
-- `state` (string, optional): Issue state filter - "open", "closed", or "all" (default: "open")
-- `labels` (array, optional): Array of label names to filter by
-- `per_page` (number, optional): Number of items per page, max 100 (default: 100)
-
-**Example:**
-```json
-{
-  "name": "github-project",
-  "arguments": {
-    "state": "open",
-    "labels": ["bug", "enhancement"]
-  }
-}
-```
-
-**MCP Configuration Example:**
 ```json
 {
   "servers": {
-    "clartat-mcp": {
+    "clartat": {
       "command": "java",
-      "args": [
-        "-jar",
-        "/path/to/clartat-mcp.jar"
-      ],
+      "args": ["-jar", "/absolute/path/to/clartat-mcp.jar"],
       "env": {
-        "GITHUB_TOKEN": "ghp_your_token_here",
-        "GITHUB_OWNER": "your-username",
-        "GITHUB_REPO": "your-repository"
+        "GITHUB_TOKEN": "ghp_xxxxxxxxxxxxx",
+        "GITHUB_OWNER": "YourOrganization",
+        "GITHUB_REPO": "1"
       }
     }
   }
 }
 ```
 
-**Returns:**
-- List of issues with full details (title, state, labels, assignees, dates, etc.)
-- Summary statistics (total count, open/closed counts, unique labels)
+**Replace:**
+- `/absolute/path/to/clartat-mcp.jar` → actual path to the JAR
+- `ghp_xxxxxxxxxxxxx` → your GitHub token
+- `YourOrganization` → your GitHub organization name
+- `1` → your project number
+
+### Step 5: Activate the Server
+
+1. Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on Mac)
+2. Type **"Developer: Reload Window"**
+3. Press Enter
+
+### Step 6: Use It!
+
+Open GitHub Copilot Chat and ask:
+- "Show me all issues from the project"
+- "What are the open issues?"
+- "Summarize the project status"
+
+The `github-project` tool will fetch all data from your GitHub Project!
+
+---
+
+## 📋 What You Get
+
+The tool returns:
+- ✅ **All project items** (issues, draft issues, pull requests)
+- ✅ **Complete issue details** (title, description, state, URL)
+- ✅ **Repository information** for each item
+- ✅ **Custom project fields** (Status, Priority, Size, etc.)
+- ✅ **Full JSON data** for advanced analysis
+
+Example output:
+```markdown
+# GitHub Project Items
+
+**Organization**: MyOrg
+**Project Number**: 1
+**Total Items**: 32
+**Issues**: 30
+
+## Issues
+
+### #4: Create User Authentication
+**State**: OPEN
+**URL**: https://github.com/MyOrg/my-repo/issues/4
+**Repository**: MyOrg/my-repo
+
+Implement OAuth 2.0 authentication flow...
+```
+
+---
+
+## 🔒 Security
+
+**⚠️ Important:**
+- Never commit `.vscode/mcp.json` with your token
+- Add it to `.gitignore`:
+  ```bash
+  echo ".vscode/mcp.json" >> .gitignore
+  ```
+- Rotate tokens regularly
+- Use minimal scopes (only what's needed)
+
+---
+
+## 🐛 Troubleshooting
+
+### Tool not showing in Copilot?
+1. Check the JAR path is **absolute** (not relative)
+2. Reload VS Code: `Ctrl+Shift+P` → "Developer: Reload Window"
+3. Check VS Code Output: `View` → `Output` → select `MCP`
+
+### Authentication error?
+- Verify token has `repo`, `read:org`, `read:project` scopes
+- Check token hasn't expired
+- Make sure `GITHUB_TOKEN` is set correctly
+
+### Project not found?
+- `GITHUB_OWNER` must be the **exact** organization name
+- `GITHUB_REPO` must be just the **number** (e.g., "1", not "My Project")
+- Ensure your token has access to that organization
+
+---
+
+## 🛠️ Development
+
+### Build & Test
+
+```bash
+# Compile
+sbt compile
+
+# Create JAR
+sbt assembly
+
+# Run tests
+sbt test
+```
+
+### Test Manually
+
+```bash
+# List available tools
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | \
+  java -jar target/scala-3.7.3/clartat-mcp.jar | jq '.'
+```
+
+---
+
+## 📁 Project Structure
+
+```
+src/main/scala/com/clartat/mcp/
+├── McpServerApp.scala                    # Entry point
+├── client/
+│   └── GithubGraphQLClient.scala        # GitHub GraphQL API
+├── domain/
+│   ├── JsonRpc.scala                    # JSON-RPC models
+│   ├── McpProtocol.scala                # MCP models
+│   ├── Tool.scala                       # Tool models
+│   └── github/ProjectV2.scala           # GitHub models
+├── protocol/
+│   ├── JsonRpcProtocol.scala            # JSON-RPC protocol
+│   └── McpProtocol.scala                # MCP protocol
+├── service/
+│   ├── McpRequestHandler.scala          # Request handling
+│   └── McpServerIO.scala                # I/O (stdin/stdout)
+└── tools/
+    ├── Tool.scala                       # Tool base trait
+    ├── ToolRegistry.scala               # Tool registry
+    ├── DefaultTools.scala               # Tool configuration
+    └── impl/GithubProjectV2Tool.scala   # GitHub tool
+```
+
+**Architecture:**
+- **Clean separation** between domain, protocol, service, and tools
+- **Extensible** tool system via registry pattern
+- **Type-safe** with Scala 3 and Circe for JSON
+
+---
+
+## 📝 License
+
+MIT License - See LICENSE file for details
+
+---
+
+## 🤝 Contributing
+
+Contributions welcome! Feel free to:
+- Report bugs
+- Suggest features
+- Submit pull requests
+
+---
+
+**Made with ❤️ using Scala 3 and the Model Context Protocol**
