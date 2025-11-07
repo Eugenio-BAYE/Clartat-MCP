@@ -77,8 +77,19 @@ The JAR will be created at `target/scala-3.7.3/clartat-mcp.jar`
 
 ### Server Mode (MCP Protocol)
 
-```bash
-java -jar target/scala-3.7.3/clartat-mcp.jar
+```json
+{
+	"servers": {
+        "clartat-mcp": {
+        "command": "java",
+        "args": [
+            "-jar",
+            "{PathToYouJar}/clartat-mcp.jar"
+        ],
+        "env": {}
+        }
+    }
+}
 ```
 
 The server communicates via stdin/stdout using the JSON-RPC 2.0 protocol.
