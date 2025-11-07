@@ -224,3 +224,71 @@ The server implements the following MCP methods:
 - `tools/list`: Lists all available tools
 - `tools/call`: Executes a tool with arguments
 - `notifications/initialized`: Handles initialization notification
+
+## Available Tools
+
+### 1. add
+Adds two integers and returns their sum.
+
+**Parameters:**
+- `a` (number, required): First number to add
+- `b` (number, required): Second number to add
+
+**Example:**
+```json
+{
+  "name": "add",
+  "arguments": {
+    "a": 9,
+    "b": 7
+  }
+}
+```
+
+### 2. github-project
+Fetches issues from a configured GitHub repository for analysis.
+
+**Configuration (Environment Variables):**
+- `GITHUB_TOKEN` (required): GitHub Personal Access Token with repo access
+- `GITHUB_OWNER` (required): Repository owner (e.g., "octocat")
+- `GITHUB_REPO` (required): Repository name (e.g., "hello-world")
+
+**Parameters:**
+- `state` (string, optional): Issue state filter - "open", "closed", or "all" (default: "open")
+- `labels` (array, optional): Array of label names to filter by
+- `per_page` (number, optional): Number of items per page, max 100 (default: 100)
+
+**Example:**
+```json
+{
+  "name": "github-project",
+  "arguments": {
+    "state": "open",
+    "labels": ["bug", "enhancement"]
+  }
+}
+```
+
+**MCP Configuration Example:**
+```json
+{
+  "servers": {
+    "clartat-mcp": {
+      "command": "java",
+      "args": [
+        "-jar",
+        "/path/to/clartat-mcp.jar"
+      ],
+      "env": {
+        "GITHUB_TOKEN": "ghp_your_token_here",
+        "GITHUB_OWNER": "your-username",
+        "GITHUB_REPO": "your-repository"
+      }
+    }
+  }
+}
+```
+
+**Returns:**
+- List of issues with full details (title, state, labels, assignees, dates, etc.)
+- Summary statistics (total count, open/closed counts, unique labels)

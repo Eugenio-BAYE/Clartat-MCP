@@ -10,9 +10,14 @@ lazy val root = project
 
     // Dependencies
     libraryDependencies ++= Seq(
+      // JSON handling
       "io.circe" %% "circe-core" % "0.14.6",
       "io.circe" %% "circe-generic" % "0.14.6",
-      "io.circe" %% "circe-parser" % "0.14.6"
+      "io.circe" %% "circe-parser" % "0.14.6",
+      
+      // HTTP client for GitHub API
+      "com.softwaremill.sttp.client3" %% "core" % "3.9.1",
+      "com.softwaremill.sttp.client3" %% "circe" % "3.9.1"
     ),
 
     // Compiler options for better error messages and warnings

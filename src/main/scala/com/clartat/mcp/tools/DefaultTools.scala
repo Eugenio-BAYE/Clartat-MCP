@@ -19,7 +19,8 @@ object DefaultTools {
    * Add new tools here to make them available in the server
    */
   val defaultTools: List[Tool] = List(
-    AddTool()
+    AddTool(),
+    GithubProjectV2Tool()
     // Add more tools here, for example:
     // SubtractTool(),
     // MultiplyTool(),
