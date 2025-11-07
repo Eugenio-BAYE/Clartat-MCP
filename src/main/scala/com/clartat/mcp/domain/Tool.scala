@@ -7,14 +7,25 @@ import io.circe.Json
  * 
  * @param name Parameter name
  * @param description Parameter description
- * @param paramType Parameter type (e.g., "number", "string", "boolean")
+ * @param paramType Parameter type (e.g., "number", "string", "boolean", "array")
  * @param required Whether the parameter is required
+ * @param items Optional specification of array item type (required when paramType is "array")
  */
 case class ToolParameter(
   name: String,
   description: String,
   paramType: String,
-  required: Boolean = true
+  required: Boolean = true,
+  items: Option[ToolParameterItems] = None
+)
+
+/**
+ * Represents the item type specification for array parameters
+ * 
+ * @param itemType The type of items in the array (e.g., "string", "number")
+ */
+case class ToolParameterItems(
+  itemType: String
 )
 
 /**

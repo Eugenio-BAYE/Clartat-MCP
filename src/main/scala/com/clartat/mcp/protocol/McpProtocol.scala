@@ -20,7 +20,7 @@ object McpProtocol {
     InitializeResult(
       protocolVersion = McpConfig.ProtocolVersion,
       capabilities = Capabilities(
-        tools = Some(ToolsCapability(listChanged = Some(false)))
+        tools = Some(ToolsCapability(listChanged = Some(true)))
       ),
       serverInfo = ServerInfo(
         name = McpConfig.ServerName,
@@ -44,10 +44,29 @@ object McpProtocol {
   ): Json = {
     val properties = Json.obj(
       parameters.map { param =>
-        param.name -> Json.obj(
+        val baseFields = List(
           "type" -> Json.fromString(param.paramType),
           "description" -> Json.fromString(param.description)
         )
+        
+        // Add items field for array types
+        val fields = if (param.paramType == "array") {
+          param.items match {
+            case Some(items) =>
+              baseFields :+ ("items" -> Json.obj(
+                "type" -> Json.fromString(items.itemType)
+              ))
+            case None =>
+              // Array type must have items defined
+              throw new IllegalArgumentException(
+                s"Parameter '${param.name}' is of type 'array' but has no 'items' specification"
+              )
+          }
+        } else {
+          baseFields
+        }
+        
+        param.name -> Json.obj(fields*)
       }*
     )
     
@@ -58,7 +77,7 @@ object McpProtocol {
     Json.obj(
       "name" -> Json.fromString(name),
       "description" -> Json.fromString(description),
-      "inputSchema" -> Json.obj(
+      "parameters" -> Json.obj(
         "type" -> Json.fromString("object"),
         "properties" -> properties,
         "required" -> required

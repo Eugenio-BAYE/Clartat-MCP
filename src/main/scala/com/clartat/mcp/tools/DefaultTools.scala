@@ -5,34 +5,34 @@ import com.clartat.mcp.tools.impl._
 /**
  * Default tool set for the MCP server
  * 
- * This object provides a convenient way to get all default tools.
- * To add a new tool:
- * 1. Create a new class in com.clartat.mcp.tools.impl that extends Tool
- * 2. Add it to the defaultTools list below
- * 3. That's it! The tool will be automatically registered and available.
+ * This object provides the GitHub Project v2 tool for analyzing GitHub Projects.
  */
 object DefaultTools {
   
   /**
-   * List of all default tools
-   * 
-   * Add new tools here to make them available in the server
+   * List of all available tools
    */
   val defaultTools: List[Tool] = List(
-    AddTool()
-    // Add more tools here, for example:
-    // SubtractTool(),
-    // MultiplyTool(),
-    // DivideTool(),
-    // etc.
+    GithubProjectV2Tool()
   )
   
   /**
-   * Creates a tool registry with all default tools registered
+   * Registers all default tools in a registry
    * 
-   * @return Tool registry with default tools
+   * @param registry The registry to populate
+   * @return The populated registry
+   */
+  def registerAll(registry: ToolRegistry): ToolRegistry = {
+    registry.registerAll(defaultTools*)
+  }
+  
+  /**
+   * Creates a new tool registry with all default tools
+   * 
+   * @return A populated tool registry
    */
   def createRegistry(): ToolRegistry = {
-    ToolRegistry(defaultTools*)
+    val registry = new ToolRegistry()
+    registerAll(registry)
   }
 }
