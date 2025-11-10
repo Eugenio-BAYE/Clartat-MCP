@@ -191,7 +191,7 @@ class McpServerIO(requestHandler: McpRequestHandler) {
       }
     }
     
-    val response = requestHandler.handleRequest(request, clientName)
+    val response = requestHandler.handleRequest(request)
     
     // Only send a response if the request had an ID (not a notification)
     if (shouldSendResponse(request, response)) {
