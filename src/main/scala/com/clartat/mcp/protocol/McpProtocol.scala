@@ -74,6 +74,9 @@ object McpProtocol {
       parameters.filter(_.required).map(p => Json.fromString(p.name))*
     )
     
+    // TODO: MCP spec uses "inputSchema" but VSCode uses "parameters"
+    // Currently using "parameters" for VSCode compatibility
+    // Cursor may need "inputSchema" - to be investigated
     Json.obj(
       "name" -> Json.fromString(name),
       "description" -> Json.fromString(description),

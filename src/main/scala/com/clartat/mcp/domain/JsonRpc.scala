@@ -1,6 +1,7 @@
 package com.clartat.mcp.domain
 
-import io.circe.Json
+import io.circe.{Encoder, Json}
+import io.circe.syntax._
 
 /**
  * JSON-RPC 2.0 domain models
@@ -36,6 +37,32 @@ case class JsonRpcResponse(
   result: Option[Json] = None,
   error: Option[JsonRpcError] = None
 )
+
+object JsonRpcResponse {
+  // Import the generic auto encoder for JsonRpcError
+  import io.circe.generic.auto._
+  
+  // Custom encoder that omits null fields
+  implicit val encoder: Encoder[JsonRpcResponse] = (response: JsonRpcResponse) => {
+    val fields = scala.collection.mutable.ListBuffer(
+      "jsonrpc" -> Json.fromString(response.jsonrpc)
+    )
+    
+    // Add id (can be null for some responses)
+    fields += ("id" -> response.id.getOrElse(Json.Null))
+    
+    // Add result or error, but not both, and omit if None
+    response.result match {
+      case Some(r) => fields += ("result" -> r)
+      case None => response.error match {
+        case Some(e) => fields += ("error" -> e.asJson)
+        case None => // No result and no error - should not happen but handle gracefully
+      }
+    }
+    
+    Json.obj(fields.toSeq*)
+  }
+}
 
 /**
  * Represents a JSON-RPC 2.0 error object
