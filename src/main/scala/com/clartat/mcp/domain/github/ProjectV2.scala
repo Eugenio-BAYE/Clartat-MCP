@@ -140,3 +140,21 @@ object ProjectV2Field {
   implicit val decoder: Decoder[ProjectV2Field] = deriveDecoder[ProjectV2Field]
   implicit val encoder: Encoder[ProjectV2Field] = deriveEncoder[ProjectV2Field]
 }
+
+/**
+ * Result of creating a GitHub issue
+ * 
+ * @param id The issue node ID
+ * @param number The issue number
+ * @param url The issue URL
+ */
+case class CreateIssueResult(
+  id: String,
+  number: Int,
+  url: String
+)
+
+object CreateIssueResult {
+  implicit val decoder: Decoder[CreateIssueResult] = deriveDecoder[CreateIssueResult]
+  implicit val encoder: Encoder[CreateIssueResult] = deriveEncoder[CreateIssueResult]
+}

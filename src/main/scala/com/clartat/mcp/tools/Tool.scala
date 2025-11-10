@@ -41,10 +41,21 @@ trait Tool {
    * @return true if arguments are valid, false otherwise
    */
   def validateArguments(arguments: Json): Boolean = {
+    System.err.println(s"[Tool.$name] Validating arguments: ${arguments.noSpaces}")
+    
     val cursor = arguments.hcursor
-    parameters.filter(_.required).forall { param =>
-      cursor.downField(param.name).succeeded
+    val requiredParams = parameters.filter(_.required)
+    
+    System.err.println(s"[Tool.$name] Required parameters: ${requiredParams.map(_.name).mkString(", ")}")
+    
+    val allValid = requiredParams.forall { param =>
+      val exists = cursor.downField(param.name).succeeded
+      System.err.println(s"[Tool.$name] Parameter '${param.name}' exists: $exists")
+      exists
     }
+    
+    System.err.println(s"[Tool.$name] Validation result: $allValid")
+    allValid
   }
 }
 

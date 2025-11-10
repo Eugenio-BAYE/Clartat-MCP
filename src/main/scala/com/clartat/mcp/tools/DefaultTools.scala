@@ -5,7 +5,8 @@ import com.clartat.mcp.tools.impl._
 /**
  * Default tool set for the MCP server
  * 
- * This object provides the GitHub Project v2 tool for analyzing GitHub Projects.
+ * This object provides the GitHub Project v2 tool for analyzing GitHub Projects
+ * and the Create Issue tool for creating new issues.
  */
 object DefaultTools {
   
@@ -13,7 +14,8 @@ object DefaultTools {
    * List of all available tools
    */
   val defaultTools: List[Tool] = List(
-    GithubProjectV2Tool()
+    GithubProjectV2Tool(),
+    GithubCreateIssueTool()
   )
   
   /**
