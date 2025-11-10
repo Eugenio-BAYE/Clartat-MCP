@@ -59,9 +59,6 @@ class GithubCreateIssueTool extends Tool {
   )
   
   override def execute(arguments: Json): ToolResult = {
-    // Debug: Log received arguments
-    System.err.println(s"[create-github-issue] Received arguments: ${arguments.noSpaces}")
-    
     // Handle case where arguments might be empty object or null
     if (arguments.isNull || arguments.asObject.exists(_.isEmpty)) {
       return Tool.failure(
@@ -77,12 +74,6 @@ class GithubCreateIssueTool extends Tool {
     val bodyOpt = arguments.hcursor.get[String]("body").toOption
     val sizeOpt = arguments.hcursor.get[String]("size").toOption
     val priorityOpt = arguments.hcursor.get[String]("priority").toOption
-    
-    // Debug: Log extraction results
-    System.err.println(s"[create-github-issue] Title extraction: $titleResult")
-    System.err.println(s"[create-github-issue] Body: $bodyOpt")
-    System.err.println(s"[create-github-issue] Size: $sizeOpt")
-    System.err.println(s"[create-github-issue] Priority: $priorityOpt")
     
     // Validate size
     val validSizes = Set("XS", "S", "M", "L", "XL")

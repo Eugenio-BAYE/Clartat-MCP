@@ -70,25 +70,41 @@ Create `.vscode/mcp.json` in your workspace:
 
 ### Step 6: Use It!
 
-Open GitHub Copilot Chat and ask:
+Open GitHub Copilot Chat and use the available tools:
+
+#### View Project Issues
 - "Show me all issues from the project"
 - "What are the open issues?"
 - "Summarize the project status"
 
 The `github-project` tool will fetch all data from your GitHub Project!
 
+#### Create New Issues
+- "Create an issue: 'Implement authentication' with size M and priority P2"
+- "Add a ticket: 'Fix login bug' priority P0"
+- "Create issue 'Add dark mode' size L priority P3"
+
+The `create-github-issue` tool will:
+- ✅ Create the issue in the repository
+- ✅ Automatically add it to your project
+- ✅ Set Size and Priority custom fields
+
 ---
 
-## 📋 What You Get
+## 📋 Available Tools
 
-The tool returns:
+### 1. `github-project` - View Project Items
+
+Fetches and displays all items from your GitHub Project.
+
+**What you get:**
 - ✅ **All project items** (issues, draft issues, pull requests)
 - ✅ **Complete issue details** (title, description, state, URL)
 - ✅ **Repository information** for each item
 - ✅ **Custom project fields** (Status, Priority, Size, etc.)
 - ✅ **Full JSON data** for advanced analysis
 
-Example output:
+**Example output:**
 ```markdown
 # GitHub Project Items
 
@@ -105,6 +121,55 @@ Example output:
 **Repository**: MyOrg/my-repo
 
 Implement OAuth 2.0 authentication flow...
+```
+
+### 2. `create-github-issue` - Create Project Issues
+
+Creates a new GitHub issue and automatically adds it to your project with custom fields.
+
+**Parameters:**
+- **title** (required): Issue title
+- **body** (optional): Issue description
+- **size** (optional): Issue size - `XS`, `S`, `M`, `L`, or `XL`
+- **priority** (optional): Issue priority - `P0`, `P1`, `P2`, `P3`, `P4`, or `P5`
+
+**What it does:**
+1. Creates the issue in the repository associated with your project
+2. Automatically adds it to your GitHub Project
+3. Sets the Size and Priority custom fields (if provided)
+
+**Requirements:**
+- Your GitHub Project must have custom fields named "Size" and "Priority" (case-insensitive)
+- Size field: Single-select with options XS, S, M, L, XL
+- Priority field: Single-select with options P0, P1, P2, P3, P4, P5
+
+**Optional configuration:**
+Add `GITHUB_REPO_NAME` to your environment if your project is empty:
+```json
+{
+  "env": {
+    "GITHUB_TOKEN": "...",
+    "GITHUB_OWNER": "...",
+    "GITHUB_REPO": "1",
+    "GITHUB_REPO_NAME": "my-repo"
+  }
+}
+```
+
+**Example output:**
+```markdown
+✅ Issue Created Successfully
+
+**Repository**: MyOrg/my-repo
+**Issue Number**: #42
+**Title**: Implement OAuth authentication
+**URL**: https://github.com/MyOrg/my-repo/issues/42
+✅ **Added to Project**
+**Size**: M
+**Priority**: P2
+
+## Description
+Add OAuth 2.0 support for user authentication
 ```
 
 ---
