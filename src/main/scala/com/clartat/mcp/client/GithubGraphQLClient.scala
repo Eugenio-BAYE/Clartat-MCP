@@ -263,4 +263,195 @@ class GithubGraphQLClient(token: String) {
       date = date
     )
   }
+  
+  /**
+   * Gets the default repository from project items
+   * 
+   * @param orgLogin Organization login
+   * @param projectNumber Project number
+   * @return Either an error message or a tuple of (owner, repo)
+   */
+  def getProjectRepository(
+    orgLogin: String,
+    projectNumber: Int
+  ): Either[String, (String, String)] = {
+    fetchProjectItems(orgLogin, projectNumber) match {
+      case Right(items) =>
+        // Find first issue with a repository
+        items.flatMap(_.content).find(_.typename == "Issue") match {
+          case Some(issue) =>
+            Right((issue.repository.owner.login, issue.repository.name))
+          case None =>
+            Left("No issues found in project. Please add at least one issue manually first.")
+        }
+      case Left(error) =>
+        Left(s"Failed to fetch project items: $error")
+    }
+  }
+  
+  /**
+   * Creates a GitHub issue
+   * 
+   * @param owner Repository owner (organization or user)
+   * @param repo Repository name
+   * @param title Issue title
+   * @param body Optional issue body
+   * @return Either an error message or the created issue details
+   */
+  def createIssue(
+    owner: String,
+    repo: String,
+    title: String,
+    body: Option[String]
+  ): Either[String, CreateIssueResult] = {
+    
+    // Get repository ID first
+    getRepositoryId(owner, repo) match {
+      case Left(error) => Left(error)
+      case Right(repositoryId) =>
+        
+        val bodyValue = body.getOrElse("")
+        val query = s"""
+          mutation {
+            createIssue(input: {
+              repositoryId: "$repositoryId",
+              title: ${escapeGraphQLString(title)},
+              body: ${escapeGraphQLString(bodyValue)}
+            }) {
+              issue {
+                id
+                number
+                url
+              }
+            }
+          }
+        """
+        
+        val requestBody = Json.obj(
+          "query" -> Json.fromString(query)
+        )
+        
+        val request = basicRequest
+          .post(uri"$graphqlUrl")
+          .header("Authorization", s"Bearer $token")
+          .header("Content-Type", "application/json")
+          .body(requestBody.noSpaces)
+        
+        try {
+          val response = request.send(backend)
+          
+          response.body match {
+            case Right(responseBody) =>
+              parseCreateIssueResponse(responseBody)
+            case Left(error) =>
+              Left(s"HTTP error: $error")
+          }
+        } catch {
+          case e: Exception =>
+            Left(s"Request failed: ${e.getMessage}")
+        }
+    }
+  }
+  
+  /**
+   * Gets the repository node ID
+   */
+  private def getRepositoryId(owner: String, repo: String): Either[String, String] = {
+    val query = s"""
+      query {
+        repository(owner: "$owner", name: "$repo") {
+          id
+        }
+      }
+    """
+    
+    val requestBody = Json.obj(
+      "query" -> Json.fromString(query)
+    )
+    
+    val request = basicRequest
+      .post(uri"$graphqlUrl")
+      .header("Authorization", s"Bearer $token")
+      .header("Content-Type", "application/json")
+      .body(requestBody.noSpaces)
+    
+    try {
+      val response = request.send(backend)
+      
+      response.body match {
+        case Right(body) =>
+          parse(body) match {
+            case Right(json) =>
+              val cursor = json.hcursor
+              
+              // Check for GraphQL errors
+              cursor.downField("errors").focus match {
+                case Some(errors) =>
+                  return Left(s"GraphQL error: ${errors.noSpaces}")
+                case None => // No errors, continue
+              }
+              
+              cursor.downField("data").downField("repository").get[String]("id") match {
+                case Right(id) => Right(id)
+                case Left(_) => Left(s"Repository not found: $owner/$repo")
+              }
+              
+            case Left(error) =>
+              Left(s"Failed to parse JSON response: ${error.getMessage}")
+          }
+        case Left(error) =>
+          Left(s"HTTP error: $error")
+      }
+    } catch {
+      case e: Exception =>
+        Left(s"Request failed: ${e.getMessage}")
+    }
+  }
+  
+  /**
+   * Parses the createIssue mutation response
+   */
+  private def parseCreateIssueResponse(body: String): Either[String, CreateIssueResult] = {
+    parse(body) match {
+      case Right(json) =>
+        val cursor = json.hcursor
+        
+        // Check for GraphQL errors
+        cursor.downField("errors").focus match {
+          case Some(errors) =>
+            return Left(s"GraphQL error: ${errors.noSpaces}")
+          case None => // No errors, continue
+        }
+        
+        // Extract issue data
+        val issueCursor = cursor
+          .downField("data")
+          .downField("createIssue")
+          .downField("issue")
+        
+        val result = for {
+          id <- issueCursor.get[String]("id")
+          number <- issueCursor.get[Int]("number")
+          url <- issueCursor.get[String]("url")
+        } yield CreateIssueResult(id, number, url)
+        
+        result.left.map(err => s"Failed to parse issue data: ${err.getMessage}")
+        
+      case Left(error) =>
+        Left(s"Failed to parse JSON response: ${error.getMessage}")
+    }
+  }
+  
+  /**
+   * Escapes a string for use in GraphQL
+   */
+  private def escapeGraphQLString(s: String): String = {
+    val escaped = s
+      .replace("\\", "\\\\")
+      .replace("\"", "\\\"")
+      .replace("\n", "\\n")
+      .replace("\r", "\\r")
+      .replace("\t", "\\t")
+    s""""$escaped""""
+  }
 }
