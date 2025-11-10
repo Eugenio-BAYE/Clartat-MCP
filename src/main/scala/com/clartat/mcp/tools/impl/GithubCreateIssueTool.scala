@@ -28,14 +28,15 @@ class GithubCreateIssueTool extends Tool {
   
   override val description: String = 
     "Creates a new GitHub issue in the repository associated with the configured project. " +
-    "The issue is created with a title and optional body."
+    "Requires a 'title' parameter (string) and accepts an optional 'body' parameter (string). " +
+    "Example: {\"title\": \"Fix login bug\", \"body\": \"Users cannot log in with OAuth\"}"
   
   override val parameters: List[ToolParameter] = List(
     ToolParameter(
       name = "title",
       paramType = "string",
       description = "Issue title (required)",
-      required = true
+      required = false  // Set to false to bypass validation, we'll check manually
     ),
     ToolParameter(
       name = "body",
@@ -46,14 +47,31 @@ class GithubCreateIssueTool extends Tool {
   )
   
   override def execute(arguments: Json): ToolResult = {
+    // Debug: Log received arguments
+    System.err.println(s"[create-github-issue] Received arguments: ${arguments.noSpaces}")
+    
+    // Handle case where arguments might be empty object or null
+    if (arguments.isNull || arguments.asObject.exists(_.isEmpty)) {
+      return Tool.failure(
+        "No arguments provided. This tool requires a 'title' parameter.\n\n" +
+        "Note: There may be a compatibility issue with how Cursor passes arguments to this tool.\n" +
+        "You can test the tool manually with this command:\n\n" +
+        "echo '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"create-github-issue\",\"arguments\":{\"title\":\"Test Issue\",\"body\":\"Test body\"}}}' | java -jar clartat-mcp.jar"
+      )
+    }
+    
     // Extract parameters
     val titleResult = arguments.hcursor.get[String]("title")
     val bodyOpt = arguments.hcursor.get[String]("body").toOption
     
+    // Debug: Log extraction results
+    System.err.println(s"[create-github-issue] Title extraction: $titleResult")
+    System.err.println(s"[create-github-issue] Body: $bodyOpt")
+    
     // Validate title
     titleResult match {
-      case Left(_) =>
-        Tool.failure("Title is required")
+      case Left(error) =>
+        Tool.failure(s"Title is required. Error: ${error.getMessage}")
         
       case Right(title) if title.trim.isEmpty =>
         Tool.failure("Title cannot be empty")
@@ -66,6 +84,9 @@ class GithubCreateIssueTool extends Tool {
           projectNumberStr <- sys.env.get("GITHUB_REPO")
         } yield (token, org, projectNumberStr)
         
+        // Optional: explicit repository name
+        val repoName = sys.env.get("GITHUB_REPO_NAME")
+        
         envConfig match {
           case None =>
             Tool.failure(
@@ -77,7 +98,7 @@ class GithubCreateIssueTool extends Tool {
             // Try to parse project number
             try {
               val projectNumber = projectNumberStr.toInt
-              executeWithConfig(token, org, projectNumber, title, bodyOpt)
+              executeWithConfig(token, org, projectNumber, repoName, title, bodyOpt)
             } catch {
               case _: NumberFormatException =>
                 Tool.failure(s"GITHUB_REPO must be a number (project number), got: $projectNumberStr")
@@ -92,6 +113,7 @@ class GithubCreateIssueTool extends Tool {
    * @param token GitHub token
    * @param org Organization login
    * @param projectNumber Project number
+   * @param repoName Optional explicit repository name
    * @param title Issue title
    * @param body Optional issue body
    * @return Tool execution result
@@ -100,14 +122,15 @@ class GithubCreateIssueTool extends Tool {
     token: String,
     org: String,
     projectNumber: Int,
+    repoName: Option[String],
     title: String,
     body: Option[String]
   ): ToolResult = {
     
     val client = new GithubGraphQLClient(token)
     
-    // Step 1: Get default repository from project
-    client.getProjectRepository(org, projectNumber) match {
+    // Step 1: Get repository (explicit or auto-detect)
+    client.getProjectRepository(org, projectNumber, repoName) match {
       case Left(error) =>
         Tool.failure(error)
         
