@@ -140,8 +140,30 @@ class GithubCreateIssueTool extends Tool {
           case Left(error) =>
             Tool.failure(s"Failed to create issue: $error")
             
-          case Right(result) =>
-            formatSuccess(result, owner, repo, title, body)
+          case Right(issueResult) =>
+            // Step 3: Get project ID
+            client.getProjectId(org, projectNumber) match {
+              case Left(error) =>
+                Tool.failure(
+                  s"Issue created successfully (#${issueResult.number}) but failed to add to project: $error\n" +
+                  s"Issue URL: ${issueResult.url}"
+                )
+                
+              case Right(projectId) =>
+                // Step 4: Add issue to project
+                client.addIssueToProject(projectId, issueResult.id) match {
+                  case Left(error) =>
+                    Tool.failure(
+                      s"Issue created successfully (#${issueResult.number}) but failed to add to project: $error\n" +
+                      s"Issue URL: ${issueResult.url}\n" +
+                      s"You can add it manually to the project."
+                    )
+                    
+                  case Right(projectItemId) =>
+                    System.err.println(s"Successfully added issue to project (item ID: $projectItemId)")
+                    formatSuccess(issueResult, owner, repo, title, body, addedToProject = true)
+                }
+            }
         }
     }
   }
@@ -154,13 +176,20 @@ class GithubCreateIssueTool extends Tool {
     owner: String,
     repo: String,
     title: String,
-    body: Option[String]
+    body: Option[String],
+    addedToProject: Boolean = false
   ): ToolResult = {
     
     val bodyPreview = body match {
       case Some(b) if b.length > 100 => b.take(100) + "..."
       case Some(b) => b
       case None => "_No description_"
+    }
+    
+    val projectStatus = if (addedToProject) {
+      "✅ **Added to Project**"
+    } else {
+      "⚠️ Not added to project"
     }
     
     val summary = s"""
@@ -170,6 +199,7 @@ class GithubCreateIssueTool extends Tool {
       |**Issue Number**: #${result.number}
       |**Title**: $title
       |**URL**: ${result.url}
+      |$projectStatus
       |
       |## Description
       |
