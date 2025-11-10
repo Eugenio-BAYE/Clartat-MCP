@@ -74,17 +74,18 @@ object McpProtocol {
       parameters.filter(_.required).map(p => Json.fromString(p.name))*
     )
     
-    // TODO: MCP spec uses "inputSchema" but VSCode uses "parameters"
-    // Currently using "parameters" for VSCode compatibility
-    // Cursor may need "inputSchema" - to be investigated
+    // Use both "inputSchema" (MCP spec, Cursor) and "parameters" (VSCode) for maximum compatibility
+    val schemaObject = Json.obj(
+      "type" -> Json.fromString("object"),
+      "properties" -> properties,
+      "required" -> required
+    )
+    
     Json.obj(
       "name" -> Json.fromString(name),
       "description" -> Json.fromString(description),
-      "parameters" -> Json.obj(
-        "type" -> Json.fromString("object"),
-        "properties" -> properties,
-        "required" -> required
-      )
+      "inputSchema" -> schemaObject,
+      "parameters" -> schemaObject
     )
   }
   
