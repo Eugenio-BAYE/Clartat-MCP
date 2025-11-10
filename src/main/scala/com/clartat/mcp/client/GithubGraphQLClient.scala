@@ -17,18 +17,43 @@ class GithubGraphQLClient(token: String) {
   /**
    * Fetches items from a GitHub Project v2
    * 
-   * @param orgLogin Organization login (e.g., "Shopifake")
+   * @param ownerLogin Organization or user login (e.g., "Shopifake" or "Eugenio-BAYE")
    * @param projectNumber Project number (e.g., 1)
    * @return Either an error message or the list of project items
    */
   def fetchProjectItems(
-    orgLogin: String,
+    ownerLogin: String,
     projectNumber: Int
+  ): Either[String, List[ProjectV2Item]] = {
+    
+    // Try organization first
+    fetchProjectItemsWithOwnerType(ownerLogin, projectNumber, "organization") match {
+      case Right(items) => Right(items)
+      case Left(error) if error.contains("NOT_FOUND") || error.contains("Could not resolve to an Organization") =>
+        // Fallback to user
+        System.err.println(s"Not an organization, trying as user...")
+        fetchProjectItemsWithOwnerType(ownerLogin, projectNumber, "user")
+      case Left(error) => Left(error)
+    }
+  }
+  
+  /**
+   * Fetches items from a GitHub Project v2 with a specific owner type
+   * 
+   * @param ownerLogin Organization or user login
+   * @param projectNumber Project number
+   * @param ownerType Either "organization" or "user"
+   * @return Either an error message or the list of project items
+   */
+  private def fetchProjectItemsWithOwnerType(
+    ownerLogin: String,
+    projectNumber: Int,
+    ownerType: String
   ): Either[String, List[ProjectV2Item]] = {
     
     val query = s"""
       query {
-        organization(login: "$orgLogin") {
+        $ownerType(login: "$ownerLogin") {
           projectV2(number: $projectNumber) {
             items(first: 100) {
               nodes {
@@ -121,7 +146,7 @@ class GithubGraphQLClient(token: String) {
       
       response.body match {
         case Right(body) =>
-          parseProjectItemsResponse(body)
+          parseProjectItemsResponse(body, ownerType)
         case Left(error) =>
           Left(s"HTTP error: $error")
       }
@@ -133,8 +158,11 @@ class GithubGraphQLClient(token: String) {
   
   /**
    * Parses the GraphQL response to extract project items
+   * 
+   * @param body The response body
+   * @param ownerType Either "organization" or "user"
    */
-  private def parseProjectItemsResponse(body: String): Either[String, List[ProjectV2Item]] = {
+  private def parseProjectItemsResponse(body: String, ownerType: String): Either[String, List[ProjectV2Item]] = {
     parse(body) match {
       case Right(json) =>
         val cursor = json.hcursor
@@ -146,10 +174,10 @@ class GithubGraphQLClient(token: String) {
           case None => // No errors, continue
         }
         
-        // Extract items
+        // Extract items (using the correct owner type field)
         val itemsResult = cursor
           .downField("data")
-          .downField("organization")
+          .downField(ownerType)
           .downField("projectV2")
           .downField("items")
           .downField("nodes")
