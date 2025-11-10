@@ -472,4 +472,463 @@ class GithubGraphQLClient(token: String) {
       .replace("\t", "\\t")
     s""""$escaped""""
   }
+  
+  /**
+   * Gets the project node ID
+   * 
+   * @param ownerLogin Organization or user login
+   * @param projectNumber Project number
+   * @return Either an error message or the project ID
+   */
+  def getProjectId(
+    ownerLogin: String,
+    projectNumber: Int
+  ): Either[String, String] = {
+    
+    // Try organization first
+    getProjectIdWithOwnerType(ownerLogin, projectNumber, "organization") match {
+      case Right(id) => Right(id)
+      case Left(error) if error.contains("NOT_FOUND") || error.contains("Could not resolve to an Organization") =>
+        // Fallback to user
+        System.err.println(s"Not an organization, trying as user for project ID...")
+        getProjectIdWithOwnerType(ownerLogin, projectNumber, "user")
+      case Left(error) => Left(error)
+    }
+  }
+  
+  /**
+   * Gets the project node ID with a specific owner type
+   */
+  private def getProjectIdWithOwnerType(
+    ownerLogin: String,
+    projectNumber: Int,
+    ownerType: String
+  ): Either[String, String] = {
+    
+    val query = s"""
+      query {
+        $ownerType(login: "$ownerLogin") {
+          projectV2(number: $projectNumber) {
+            id
+          }
+        }
+      }
+    """
+    
+    val requestBody = Json.obj(
+      "query" -> Json.fromString(query)
+    )
+    
+    val request = basicRequest
+      .post(uri"$graphqlUrl")
+      .header("Authorization", s"Bearer $token")
+      .header("Content-Type", "application/json")
+      .body(requestBody.noSpaces)
+    
+    try {
+      val response = request.send(backend)
+      
+      response.body match {
+        case Right(body) =>
+          parse(body) match {
+            case Right(json) =>
+              val cursor = json.hcursor
+              
+              // Check for GraphQL errors
+              cursor.downField("errors").focus match {
+                case Some(errors) =>
+                  return Left(s"GraphQL error: ${errors.noSpaces}")
+                case None => // No errors, continue
+              }
+              
+              cursor.downField("data").downField(ownerType).downField("projectV2").get[String]("id") match {
+                case Right(id) => Right(id)
+                case Left(_) => Left(s"Project not found: $ownerLogin project #$projectNumber")
+              }
+              
+            case Left(error) =>
+              Left(s"Failed to parse JSON response: ${error.getMessage}")
+          }
+        case Left(error) =>
+          Left(s"HTTP error: $error")
+      }
+    } catch {
+      case e: Exception =>
+        Left(s"Request failed: ${e.getMessage}")
+    }
+  }
+  
+  /**
+   * Adds an issue to a project
+   * 
+   * @param projectId Project node ID
+   * @param issueId Issue node ID
+   * @return Either an error message or the project item ID
+   */
+  def addIssueToProject(
+    projectId: String,
+    issueId: String
+  ): Either[String, String] = {
+    
+    val query = s"""
+      mutation {
+        addProjectV2ItemById(input: {
+          projectId: "$projectId",
+          contentId: "$issueId"
+        }) {
+          item {
+            id
+          }
+        }
+      }
+    """
+    
+    val requestBody = Json.obj(
+      "query" -> Json.fromString(query)
+    )
+    
+    val request = basicRequest
+      .post(uri"$graphqlUrl")
+      .header("Authorization", s"Bearer $token")
+      .header("Content-Type", "application/json")
+      .body(requestBody.noSpaces)
+    
+    try {
+      val response = request.send(backend)
+      
+      response.body match {
+        case Right(body) =>
+          parseAddToProjectResponse(body)
+        case Left(error) =>
+          Left(s"HTTP error: $error")
+      }
+    } catch {
+      case e: Exception =>
+        Left(s"Request failed: ${e.getMessage}")
+    }
+  }
+  
+  /**
+   * Parses the addProjectV2ItemById mutation response
+   */
+  private def parseAddToProjectResponse(body: String): Either[String, String] = {
+    parse(body) match {
+      case Right(json) =>
+        val cursor = json.hcursor
+        
+        // Check for GraphQL errors
+        cursor.downField("errors").focus match {
+          case Some(errors) =>
+            return Left(s"GraphQL error: ${errors.noSpaces}")
+          case None => // No errors, continue
+        }
+        
+        // Extract project item ID
+        cursor
+          .downField("data")
+          .downField("addProjectV2ItemById")
+          .downField("item")
+          .get[String]("id") match {
+            case Right(itemId) => Right(itemId)
+            case Left(error) => Left(s"Failed to parse project item ID: ${error.getMessage}")
+          }
+        
+      case Left(error) =>
+        Left(s"Failed to parse JSON response: ${error.getMessage}")
+    }
+  }
+  
+  /**
+   * Gets custom field IDs from a project
+   * 
+   * @param ownerLogin Organization or user login
+   * @param projectNumber Project number
+   * @param fieldNames List of field names to retrieve (e.g., ["Size", "Priority"])
+   * @return Either an error or a map of field name to field ID
+   */
+  def getProjectFieldIds(
+    ownerLogin: String,
+    projectNumber: Int,
+    fieldNames: List[String]
+  ): Either[String, Map[String, String]] = {
+    
+    // Try organization first
+    getProjectFieldIdsWithOwnerType(ownerLogin, projectNumber, fieldNames, "organization") match {
+      case Right(fields) => Right(fields)
+      case Left(error) if error.contains("NOT_FOUND") || error.contains("Could not resolve to an Organization") =>
+        System.err.println(s"Not an organization, trying as user for project fields...")
+        getProjectFieldIdsWithOwnerType(ownerLogin, projectNumber, fieldNames, "user")
+      case Left(error) => Left(error)
+    }
+  }
+  
+  /**
+   * Gets custom field IDs with a specific owner type
+   */
+  private def getProjectFieldIdsWithOwnerType(
+    ownerLogin: String,
+    projectNumber: Int,
+    fieldNames: List[String],
+    ownerType: String
+  ): Either[String, Map[String, String]] = {
+    
+    val query = s"""
+      query {
+        $ownerType(login: "$ownerLogin") {
+          projectV2(number: $projectNumber) {
+            fields(first: 20) {
+              nodes {
+                __typename
+                ... on ProjectV2SingleSelectField {
+                  id
+                  name
+                }
+              }
+            }
+          }
+        }
+      }
+    """
+    
+    val requestBody = Json.obj(
+      "query" -> Json.fromString(query)
+    )
+    
+    val request = basicRequest
+      .post(uri"$graphqlUrl")
+      .header("Authorization", s"Bearer $token")
+      .header("Content-Type", "application/json")
+      .body(requestBody.noSpaces)
+    
+    try {
+      val response = request.send(backend)
+      
+      response.body match {
+        case Right(body) =>
+          parseProjectFieldsResponse(body, fieldNames, ownerType)
+        case Left(error) =>
+          Left(s"HTTP error: $error")
+      }
+    } catch {
+      case e: Exception =>
+        Left(s"Request failed: ${e.getMessage}")
+    }
+  }
+  
+  /**
+   * Parses the project fields response
+   */
+  private def parseProjectFieldsResponse(
+    body: String,
+    fieldNames: List[String],
+    ownerType: String
+  ): Either[String, Map[String, String]] = {
+    parse(body) match {
+      case Right(json) =>
+        val cursor = json.hcursor
+        
+        // Check for GraphQL errors
+        cursor.downField("errors").focus match {
+          case Some(errors) =>
+            return Left(s"GraphQL error: ${errors.noSpaces}")
+          case None => // No errors, continue
+        }
+        
+        // Extract fields
+        val fieldsResult = cursor
+          .downField("data")
+          .downField(ownerType)
+          .downField("projectV2")
+          .downField("fields")
+          .downField("nodes")
+          .as[List[Json]]
+        
+        fieldsResult match {
+          case Right(fieldsJson) =>
+            val fieldMap = fieldsJson.flatMap { fieldJson =>
+              val fieldCursor = fieldJson.hcursor
+              for {
+                id <- fieldCursor.get[String]("id").toOption
+                name <- fieldCursor.get[String]("name").toOption
+                if fieldNames.exists(_.equalsIgnoreCase(name))
+              } yield name -> id
+            }.toMap
+            
+            System.err.println(s"Found custom fields: ${fieldMap.keys.mkString(", ")}")
+            Right(fieldMap)
+            
+          case Left(error) =>
+            Left(s"Failed to parse project fields: ${error.getMessage}")
+        }
+        
+      case Left(error) =>
+        Left(s"Failed to parse JSON response: ${error.getMessage}")
+    }
+  }
+  
+  /**
+   * Updates a single-select field on a project item
+   * 
+   * @param projectId Project node ID
+   * @param itemId Project item ID
+   * @param fieldId Field ID
+   * @param optionName Option name (e.g., "M", "P2")
+   * @return Either an error message or success
+   */
+  def updateProjectItemField(
+    projectId: String,
+    itemId: String,
+    fieldId: String,
+    optionName: String
+  ): Either[String, Unit] = {
+    
+    // First, get the option ID for this field value
+    getFieldOptionId(projectId, fieldId, optionName) match {
+      case Left(error) => Left(error)
+      case Right(optionId) =>
+        
+        val query = s"""
+          mutation {
+            updateProjectV2ItemFieldValue(input: {
+              projectId: "$projectId",
+              itemId: "$itemId",
+              fieldId: "$fieldId",
+              value: {
+                singleSelectOptionId: "$optionId"
+              }
+            }) {
+              projectV2Item {
+                id
+              }
+            }
+          }
+        """
+        
+        val requestBody = Json.obj(
+          "query" -> Json.fromString(query)
+        )
+        
+        val request = basicRequest
+          .post(uri"$graphqlUrl")
+          .header("Authorization", s"Bearer $token")
+          .header("Content-Type", "application/json")
+          .body(requestBody.noSpaces)
+        
+        try {
+          val response = request.send(backend)
+          
+          response.body match {
+            case Right(body) =>
+              parse(body) match {
+                case Right(json) =>
+                  val cursor = json.hcursor
+                  
+                  // Check for GraphQL errors
+                  cursor.downField("errors").focus match {
+                    case Some(errors) =>
+                      Left(s"GraphQL error: ${errors.noSpaces}")
+                    case None =>
+                      System.err.println(s"Updated field value to: $optionName")
+                      Right(())
+                  }
+                  
+                case Left(error) =>
+                  Left(s"Failed to parse JSON response: ${error.getMessage}")
+              }
+            case Left(error) =>
+              Left(s"HTTP error: $error")
+          }
+        } catch {
+          case e: Exception =>
+            Left(s"Request failed: ${e.getMessage}")
+        }
+    }
+  }
+  
+  /**
+   * Gets the option ID for a field value
+   */
+  private def getFieldOptionId(
+    projectId: String,
+    fieldId: String,
+    optionName: String
+  ): Either[String, String] = {
+    
+    val query = s"""
+      query {
+        node(id: "$fieldId") {
+          ... on ProjectV2SingleSelectField {
+            options {
+              id
+              name
+            }
+          }
+        }
+      }
+    """
+    
+    val requestBody = Json.obj(
+      "query" -> Json.fromString(query)
+    )
+    
+    val request = basicRequest
+      .post(uri"$graphqlUrl")
+      .header("Authorization", s"Bearer $token")
+      .header("Content-Type", "application/json")
+      .body(requestBody.noSpaces)
+    
+    try {
+      val response = request.send(backend)
+      
+      response.body match {
+        case Right(body) =>
+          parse(body) match {
+            case Right(json) =>
+              val cursor = json.hcursor
+              
+              // Check for GraphQL errors
+              cursor.downField("errors").focus match {
+                case Some(errors) =>
+                  return Left(s"GraphQL error: ${errors.noSpaces}")
+                case None => // No errors, continue
+              }
+              
+              // Extract options
+              val optionsResult = cursor
+                .downField("data")
+                .downField("node")
+                .downField("options")
+                .as[List[Json]]
+              
+              optionsResult match {
+                case Right(optionsJson) =>
+                  val option = optionsJson.find { optionJson =>
+                    optionJson.hcursor.get[String]("name").toOption.exists(_.equalsIgnoreCase(optionName))
+                  }
+                  
+                  option match {
+                    case Some(opt) =>
+                      opt.hcursor.get[String]("id") match {
+                        case Right(id) => Right(id)
+                        case Left(_) => Left(s"Option '$optionName' found but has no ID")
+                      }
+                    case None =>
+                      Left(s"Option '$optionName' not found in field")
+                  }
+                  
+                case Left(error) =>
+                  Left(s"Failed to parse field options: ${error.getMessage}")
+              }
+              
+            case Left(error) =>
+              Left(s"Failed to parse JSON response: ${error.getMessage}")
+          }
+        case Left(error) =>
+          Left(s"HTTP error: $error")
+      }
+    } catch {
+      case e: Exception =>
+        Left(s"Request failed: ${e.getMessage}")
+    }
+  }
 }
