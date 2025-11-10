@@ -267,22 +267,40 @@ class GithubGraphQLClient(token: String) {
   /**
    * Gets the default repository from project items
    * 
-   * @param orgLogin Organization login
+   * @param ownerLogin Organization or user login
    * @param projectNumber Project number
+   * @param repoNameHint Optional repository name hint from environment
    * @return Either an error message or a tuple of (owner, repo)
    */
   def getProjectRepository(
-    orgLogin: String,
-    projectNumber: Int
+    ownerLogin: String,
+    projectNumber: Int,
+    repoNameHint: Option[String] = None
   ): Either[String, (String, String)] = {
-    fetchProjectItems(orgLogin, projectNumber) match {
+    
+    // Strategy 1: Use explicit repo name if provided
+    repoNameHint match {
+      case Some(repoName) =>
+        System.err.println(s"Using explicit repository: $ownerLogin/$repoName")
+        return Right((ownerLogin, repoName))
+      case None =>
+        System.err.println("No explicit repository name, trying to detect from project items...")
+    }
+    
+    // Strategy 2: Auto-detect from project items
+    fetchProjectItems(ownerLogin, projectNumber) match {
       case Right(items) =>
         // Find first issue with a repository
         items.flatMap(_.content).find(_.typename == "Issue") match {
           case Some(issue) =>
+            System.err.println(s"Detected repository from project: ${issue.repository.owner.login}/${issue.repository.name}")
             Right((issue.repository.owner.login, issue.repository.name))
           case None =>
-            Left("No issues found in project. Please add at least one issue manually first.")
+            Left(
+              "No repository found. Please either:\n" +
+              "1. Add GITHUB_REPO_NAME to your MCP config (recommended), or\n" +
+              "2. Add at least one issue to your project manually first"
+            )
         }
       case Left(error) =>
         Left(s"Failed to fetch project items: $error")
