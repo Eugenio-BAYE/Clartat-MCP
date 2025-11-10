@@ -71,13 +71,20 @@ The `github-project` tool accepts optional parameters:
 
 **Known Limitation**: Cursor compatibility with tool parameters needs investigation (may require `"inputSchema"` instead).
 
-## Next Steps
+## Summary
 
-1. Explore source code to find `get project` implementation
-2. Analyze current parameters
-3. Test and validate
+Successfully implemented and validated parameter passing for the MCP `github-project` tool:
+
+1. **Protocol Support**: Auto-detects message format (newline-delimited vs Content-Length)
+2. **JSON-RPC Compliance**: Fixed response format to omit null fields
+3. **Notification Handling**: Correctly skips responses for notifications
+4. **Tool Schema**: Uses `"parameters"` for VSCode compatibility
+5. **Parameter Validation**: All three optional parameters (state, limit, search) working
+
+The tool is now fully functional on VSCode with proper parameter support.
 
 ## References
 
-- Source code: `src/main/scala/com/clartat/`
-- MCP documentation: _to be added if available_
+- Code: `src/main/scala/com/clartat/mcp/`
+- Tool implementation: `src/main/scala/com/clartat/mcp/tools/impl/GithubProjectV2Tool.scala`
+- Protocol handler: `src/main/scala/com/clartat/mcp/protocol/McpProtocol.scala`

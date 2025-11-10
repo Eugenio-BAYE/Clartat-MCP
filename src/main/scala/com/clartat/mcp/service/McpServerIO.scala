@@ -28,6 +28,9 @@ class McpServerIO(requestHandler: McpRequestHandler) {
   private var useContentLengthFormat: Boolean = false
   private var formatDetected: Boolean = false
   
+  // Track client type for compatibility
+  private var clientName: Option[String] = None
+  
   /**
    * Starts the server loop, reading from stdin and writing to stdout
    * 
@@ -167,7 +170,28 @@ class McpServerIO(requestHandler: McpRequestHandler) {
     val requestType = if (request.id.isDefined) "request" else "notification"
     System.err.println(s"Received $requestType: ${request.method} (id: ${request.id.getOrElse("none")})")
     
-    val response = requestHandler.handleRequest(request)
+    // Extract client info from initialize request
+    if (request.method == "initialize" && clientName.isEmpty) {
+      request.params.foreach { params =>
+        val cursor = params.hcursor
+        clientName = cursor.downField("clientInfo").downField("name").as[String].toOption
+        if (clientName.isEmpty) {
+          // Try alternative path
+          clientName = cursor.downField("clientInfo").get[String]("name").toOption
+        }
+        clientName match {
+          case Some(name) => 
+            val lower = name.toLowerCase
+            val useLegacy = lower.contains("vscode") || lower.contains("cursor")
+            System.err.println(s"Detected client: $name")
+            System.err.println(s"Will use legacy format (parameters): $useLegacy")
+          case None =>
+            System.err.println("Warning: Could not detect client name, using default format (inputSchema)")
+        }
+      }
+    }
+    
+    val response = requestHandler.handleRequest(request, clientName)
     
     // Only send a response if the request had an ID (not a notification)
     if (shouldSendResponse(request, response)) {
