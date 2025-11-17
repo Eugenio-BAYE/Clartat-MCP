@@ -32,8 +32,8 @@ This creates `target/scala-3.7.3/clartat-mcp.jar`
 Your GitHub Project URL looks like this:
 ```
 https://github.com/orgs/YOUR_ORG/projects/1
-                             ^^^^^^^^         ^
-                             your org         project number
+                        ^^^^^^^^          ^
+                        your org          project number
 ```
 
 ### Step 4: Configure VS Code
